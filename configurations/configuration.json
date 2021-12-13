@@ -30,6 +30,6 @@
   "no_rendering_mode": false,
   "fixed_delta_seconds": 0.05,
   "should_spawn_npcs": false,
-  "npc_config_file_path": "../ROAR_Sim/configurations/npc_config.json",
+  "npc_config_file_path": "./ROAR_Sim/configurations/npc_config.json",
   "agent_config_path": "./configurations/agent_configuration.json"
 }
