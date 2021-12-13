@@ -21,6 +21,8 @@ from typing import Optional
 import numpy as np
 import cv2
 from threading import Thread
+from datetime import datetime
+import time
 
 
 class CarlaRunner:
@@ -141,7 +143,7 @@ class CarlaRunner:
             self.logger.debug("Initiating game")
             self.agent.start_module_threads()
             clock = pygame.time.Clock()
-            self.start_simulation_time = self.world.hud.simulation_time
+            self.start_simulation_time = time.time()
             self.start_vehicle_position = self.agent.vehicle.transform.location.to_array()
 
             while True:
@@ -164,6 +166,7 @@ class CarlaRunner:
                         has_entered_bbox = True
                         lap_count += 1
                         if lap_count > self.lap_count:
+                            # if i have reached target number of lap counts, break out of game loop
                             break
                         else:
                             self.logger.info(f"Going onto Lap {lap_count} out of {self.lap_count}")
@@ -187,7 +190,7 @@ class CarlaRunner:
 
                 if self.carla_settings.save_semantic_segmentation and self.world.semantic_segmentation_sensor_data:
                     Thread(target=lambda: self.world.semantic_segmentation_sensor_data.save_to_disk((Path(
-                        "./data/output") / "ss" / f"frame_{self.agent.time_counter}.png").as_posix(),
+                        "./data/output_oct_10") / "ss" / f"frame_{self.agent.time_counter}.png").as_posix(),
                                                                                                     cc.CityScapesPalette),
                            args=()).start()
 
@@ -204,7 +207,6 @@ class CarlaRunner:
                         carla_control = self.carla_bridge. \
                             convert_control_from_agent_to_source(agent_control)
                 self.world.player.apply_control(carla_control)
-
                 self.timestep_counter += 1
 
             self.completed_lap_count = lap_count - 1
@@ -234,7 +236,7 @@ class CarlaRunner:
         else:
             self.end_vehicle_position = self.start_vehicle_position
         if self.world is not None:
-            self.end_simulation_time = self.world.hud.simulation_time
+            self.end_simulation_time = time.time()
             self.world.destroy()
             self.logger.debug("All actors are destroyed")
         try:

@@ -83,6 +83,16 @@ class KeyboardControl(object):
         else:
             raise NotImplementedError("Actor type not supported")
         self._steer_cache = 0.0
+        self.use_joystick = False
+        try:
+            pygame.joystick.init()
+            self.joystick = pygame.joystick.Joystick(0)
+            self.joystick.init()
+            self.logger.info(f"Joystick [{self.joystick.get_name()}] detected, Using Joytick")
+            self.use_joystick = True
+        except Exception as e:
+            self.logger.info("No joystick detected. Plz use your keyboard instead")
+
         self.logger.debug("Keyboard Control initiated")
 
     def parse_events(self, client, world, clock) -> \
@@ -107,7 +117,7 @@ class KeyboardControl(object):
                 elif event.key == K_F1:
                     world.hud.toggle_info()
                 elif event.key == K_h or (
-                    event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT
+                        event.key == K_SLASH and pygame.key.get_mods() & KMOD_SHIFT
                 ):
                     world.hud.help.toggle()
                 elif event.key == K_TAB:
@@ -193,37 +203,62 @@ class KeyboardControl(object):
         elif isinstance(self._control, carla.WalkerControl):
             self._parse_walker_keys(pygame.key.get_pressed(), clock.get_time(), world)
         return True, self._control
-            # world.player.apply_control(self._control)
+        # world.player.apply_control(self._control)
         # self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
         # return True, self._control
 
+    def _parse_joystick(self) -> Tuple[float, float]:
+        # code to test which axis is your controller using
+        vals = [self.joystick.get_axis(i) for i in range(self.joystick.get_numaxes())]
+        # print(vals)
+        right_trigger_val: float = self.joystick.get_axis(5)
+        left_trigger_val: float = self.joystick.get_axis(2)
+
+        right_joystick_horizontal_val = self.joystick.get_axis(3)
+
+        # post processing on raw values
+        left_trigger_val = (1 + left_trigger_val) / 2
+        right_trigger_val = (1 + right_trigger_val) / 2
+        throttle = left_trigger_val + (-1 * right_trigger_val)
+        steering = (right_joystick_horizontal_val + self._control.steer * 10) / 11
+        return throttle, steering
+
     def _parse_vehicle_keys(self, keys, milliseconds):
-        if keys[K_UP] or keys[K_w]:
-            self._control.throttle = min(self._control.throttle + 0.01, 1)
-        else:
-            self._control.throttle = 0.0
 
-        if keys[K_DOWN] or keys[K_s]:
-            self._control.brake = min(self._control.brake + 0.2, 1)
+        if self.use_joystick:
+            throttle, steering = self._parse_joystick()
+            self._control.manual_gear_shift = True
+            self._control.gear = -1 if throttle < 0 else 1
+            self._control.throttle = abs(throttle)
+            self._control.steer = steering
         else:
-            self._control.brake = 0
 
-        steer_increment = 5e-4 * milliseconds
-        if keys[K_LEFT] or keys[K_a]:
-            if self._steer_cache > 0:
-                self._steer_cache = 0
+            if keys[K_UP] or keys[K_w]:
+                self._control.throttle = min(self._control.throttle + 0.01, 1)
             else:
-                self._steer_cache -= steer_increment
-        elif keys[K_RIGHT] or keys[K_d]:
-            if self._steer_cache < 0:
-                self._steer_cache = 0
+                self._control.throttle = 0.0
+
+            if keys[K_DOWN] or keys[K_s]:
+                self._control.brake = min(self._control.brake + 0.2, 1)
             else:
-                self._steer_cache += steer_increment
-        else:
-            self._steer_cache = 0.0
-        self._steer_cache = min(0.7, max(-0.7, self._steer_cache))
-        self._control.steer = round(self._steer_cache, 1)
-        self._control.hand_brake = keys[K_SPACE]
+                self._control.brake = 0
+
+            steer_increment = 5e-4 * milliseconds
+            if keys[K_LEFT] or keys[K_a]:
+                if self._steer_cache > 0:
+                    self._steer_cache = 0
+                else:
+                    self._steer_cache -= steer_increment
+            elif keys[K_RIGHT] or keys[K_d]:
+                if self._steer_cache < 0:
+                    self._steer_cache = 0
+                else:
+                    self._steer_cache += steer_increment
+            else:
+                self._steer_cache = 0.0
+            self._steer_cache = min(0.7, max(-0.7, self._steer_cache))
+            self._control.steer = round(self._steer_cache, 1)
+            self._control.hand_brake = keys[K_SPACE]
 
     def _parse_walker_keys(self, keys, milliseconds, world):
         self._control.speed = 0.0
